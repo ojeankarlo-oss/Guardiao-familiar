@@ -1,1 +1,421 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Guardião — Painel Familiar</title>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 
+<style>
+  :root {
+    --bg:#0a0c10;--surface:#111318;--surface2:#181c24;--border:#1e2330;
+    --accent:#4f8eff;--accent2:#7c5cfc;--danger:#ff4d6d;--success:#2edd9a;
+    --warn:#ffb833;--text:#e8eaf0;--muted:#5a6070;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden}
+  body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(79,142,255,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(79,142,255,0.03) 1px,transparent 1px);background-size:40px 40px;pointer-events:none;z-index:0}
+  .orb{position:fixed;border-radius:50%;filter:blur(80px);pointer-events:none;z-index:0}
+  .orb1{width:400px;height:400px;top:-100px;left:-100px;background:rgba(79,142,255,0.06)}
+  .orb2{width:300px;height:300px;bottom:-80px;right:-80px;background:rgba(124,92,252,0.07)}
+  header{position:relative;z-index:10;display:flex;align-items:center;justify-content:space-between;padding:20px 32px;border-bottom:1px solid var(--border);background:rgba(10,12,16,0.8);backdrop-filter:blur(12px)}
+  .logo{display:flex;align-items:center;gap:10px}
+  .logo-icon{width:36px;height:36px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px}
+  .logo-text{font-size:20px;font-weight:800;letter-spacing:-0.5px}
+  .logo-text span{color:var(--accent)}
+  .header-right{display:flex;align-items:center;gap:16px}
+  .time-display{font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--muted);background:var(--surface);padding:6px 12px;border-radius:8px;border:1px solid var(--border)}
+  .btn-add{display:flex;align-items:center;gap:6px;background:linear-gradient(135deg,var(--accent),var(--accent2));border:none;color:white;padding:8px 16px;border-radius:10px;font-family:'Sora',sans-serif;font-size:13px;font-weight:600;cursor:pointer;transition:opacity .2s,transform .1s}
+  .btn-add:hover{opacity:.85;transform:translateY(-1px)}
+  #status-banner{position:relative;z-index:10;margin:16px 32px 0;padding:12px 20px;border-radius:12px;font-size:13px;display:flex;align-items:center;gap:10px}
+  #status-banner.connecting{background:rgba(255,184,51,0.08);border:1px solid rgba(255,184,51,0.25);color:var(--warn)}
+  #status-banner.connected{background:rgba(46,221,154,0.08);border:1px solid rgba(46,221,154,0.25);color:var(--success)}
+  #status-banner.error{background:rgba(255,77,109,0.08);border:1px solid rgba(255,77,109,0.25);color:var(--danger)}
+  main{position:relative;z-index:5;padding:28px 32px}
+  .stats-bar{display:flex;gap:16px;margin-bottom:28px;flex-wrap:wrap}
+  .stat-pill{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:10px 18px;font-size:13px}
+  .stat-dot{width:8px;height:8px;border-radius:50%}
+  .dot-green{background:var(--success);box-shadow:0 0 6px var(--success);animation:pulse 2s infinite}
+  .dot-red{background:var(--danger);box-shadow:0 0 6px var(--danger)}
+  .dot-gray{background:var(--muted)}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+  .stat-label{color:var(--muted)}
+  .stat-value{font-weight:700;font-size:15px}
+  .section-title{font-size:11px;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:16px}
+  .devices-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:20px;margin-bottom:36px}
+  .device-card{background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:22px;position:relative;overflow:hidden;transition:transform .2s,box-shadow .2s;animation:cardIn .4s ease backwards}
+  @keyframes cardIn{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+  .device-card:hover{transform:translateY(-2px)}
+  .device-card::before{content:'';position:absolute;inset:0;opacity:0;transition:opacity .3s}
+  .device-card.blocked{border-color:rgba(255,77,109,0.3)}
+  .device-card.blocked::before{background:rgba(255,77,109,0.12);opacity:1}
+  .device-card.online:not(.blocked){border-color:rgba(46,221,154,0.2)}
+  .device-card.online:not(.blocked)::before{background:rgba(46,221,154,0.08);opacity:1}
+  .card-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:18px}
+  .device-avatar{width:48px;height:48px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:24px;background:var(--surface2);border:1px solid var(--border);position:relative}
+  .device-avatar .status-dot{position:absolute;bottom:-2px;right:-2px;width:12px;height:12px;border-radius:50%;border:2px solid var(--surface)}
+  .status-dot.online{background:var(--success)}
+  .status-dot.offline{background:var(--muted)}
+  .device-info{flex:1;margin-left:12px}
+  .device-name{font-size:15px;font-weight:700;margin-bottom:2px}
+  .device-owner{font-size:12px;color:var(--muted)}
+  .badge-blocked{background:rgba(255,77,109,0.15);color:var(--danger);border:1px solid rgba(255,77,109,0.3);font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:3px 8px;border-radius:6px}
+  .badge-free{background:rgba(46,221,154,0.1);color:var(--success);border:1px solid rgba(46,221,154,0.25);font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:3px 8px;border-radius:6px}
+  .schedule-info{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;margin-bottom:16px}
+  .schedule-info span{flex:1}
+  .schedule-edit{color:var(--accent);cursor:pointer;font-size:11px;font-weight:600}
+  .last-seen{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);margin-bottom:16px}
+  .card-actions{display:flex;gap:10px}
+  .btn-block{flex:1;padding:11px;border-radius:12px;border:none;font-family:'Sora',sans-serif;font-size:13px;font-weight:700;cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:6px}
+  .btn-block.lock{background:linear-gradient(135deg,#ff4d6d,#c9184a);color:white;box-shadow:0 4px 16px rgba(255,77,109,0.25)}
+  .btn-block.lock:hover{box-shadow:0 6px 20px rgba(255,77,109,0.4);transform:translateY(-1px)}
+  .btn-block.unlock{background:linear-gradient(135deg,#2edd9a,#0db077);color:#001a10;box-shadow:0 4px 16px rgba(46,221,154,0.2)}
+  .btn-block.unlock:hover{box-shadow:0 6px 20px rgba(46,221,154,0.35);transform:translateY(-1px)}
+  .btn-schedule{padding:11px 14px;border-radius:12px;background:var(--surface2);border:1px solid var(--border);color:var(--muted);cursor:pointer;font-size:16px;transition:all .2s}
+  .btn-schedule:hover{border-color:var(--accent);color:var(--accent)}
+  .btn-remove{padding:11px 14px;border-radius:12px;background:transparent;border:1px solid var(--border);color:var(--muted);cursor:pointer;font-size:14px;transition:all .2s}
+  .btn-remove:hover{border-color:var(--danger);color:var(--danger)}
+  .lock-all-bar{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:20px 24px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:28px}
+  .lock-all-text{font-size:14px}
+  .lock-all-text strong{font-weight:700}
+  .lock-all-text p{font-size:12px;color:var(--muted);margin-top:2px}
+  .lock-all-btns{display:flex;gap:10px}
+  .btn-all{padding:10px 20px;border-radius:10px;border:none;font-family:'Sora',sans-serif;font-size:13px;font-weight:700;cursor:pointer;transition:all .2s}
+  .btn-all-lock{background:linear-gradient(135deg,#ff4d6d,#c9184a);color:white}
+  .btn-all-lock:hover{opacity:.85}
+  .btn-all-unlock{background:var(--surface2);border:1px solid var(--border);color:var(--text)}
+  .btn-all-unlock:hover{border-color:var(--success);color:var(--success)}
+  .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(4px);z-index:100;align-items:center;justify-content:center}
+  .modal-overlay.open{display:flex}
+  .modal{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:28px;width:100%;max-width:420px;margin:16px;animation:modalIn .2s ease}
+  @keyframes modalIn{from{opacity:0;transform:scale(.95) translateY(10px)}to{opacity:1;transform:scale(1) translateY(0)}}
+  .modal h2{font-size:18px;font-weight:700;margin-bottom:6px}
+  .modal p{font-size:13px;color:var(--muted);margin-bottom:20px}
+  .form-group{margin-bottom:16px}
+  .form-group label{display:block;font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px}
+  .form-group input,.form-group select{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 14px;color:var(--text);font-family:'Sora',sans-serif;font-size:14px;outline:none;transition:border-color .2s}
+  .form-group input:focus,.form-group select:focus{border-color:var(--accent)}
+  .emoji-grid{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+  .emoji-btn{width:44px;height:44px;border-radius:10px;background:var(--surface2);border:2px solid transparent;font-size:22px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:border-color .15s}
+  .emoji-btn.selected{border-color:var(--accent)}
+  .emoji-btn:hover{border-color:var(--muted)}
+  .modal-footer{display:flex;gap:10px;margin-top:20px}
+  .btn-cancel{flex:1;padding:11px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;color:var(--muted);font-family:'Sora',sans-serif;font-size:14px;font-weight:600;cursor:pointer;transition:all .2s}
+  .btn-cancel:hover{color:var(--text)}
+  .btn-confirm{flex:1;padding:11px;background:linear-gradient(135deg,var(--accent),var(--accent2));border:none;border-radius:10px;color:white;font-family:'Sora',sans-serif;font-size:14px;font-weight:700;cursor:pointer;transition:opacity .2s}
+  .btn-confirm:hover{opacity:.85}
+  .time-row{display:flex;gap:12px}
+  .time-row .form-group{flex:1}
+  .days-grid{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+  .day-btn{padding:6px 12px;border-radius:8px;background:var(--surface2);border:1px solid var(--border);color:var(--muted);font-size:12px;font-weight:600;cursor:pointer;transition:all .15s}
+  .day-btn.active{background:rgba(79,142,255,0.15);border-color:var(--accent);color:var(--accent)}
+  #toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 20px;font-size:13px;z-index:200;transition:transform .3s cubic-bezier(.34,1.56,.64,1);white-space:nowrap;display:flex;align-items:center;gap:8px}
+  #toast.show{transform:translateX(-50%) translateY(0)}
+  .empty-state{text-align:center;padding:60px 20px;color:var(--muted)}
+  .empty-state .empty-icon{font-size:48px;margin-bottom:12px}
+  .empty-state h3{font-size:16px;font-weight:600;color:var(--text);margin-bottom:6px}
+  .empty-state p{font-size:13px}
+  @media(max-width:600px){header{padding:14px 16px}main{padding:20px 16px}#status-banner{margin:12px 16px 0}.lock-all-bar{flex-direction:column;align-items:flex-start}}
+</style>
+</head>
+<body>
+<div class="orb orb1"></div>
+<div class="orb orb2"></div>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">🛡️</div>
+    <div class="logo-text">Guar<span>dião</span></div>
+  </div>
+  <div class="header-right">
+    <div class="time-display" id="clock">--:--:--</div>
+    <button class="btn-add" onclick="openAddModal()">+ Dispositivo</button>
+  </div>
+</header>
+
+<div id="status-banner" class="connecting">⏳ Conectando ao Firebase...</div>
+
+<main>
+  <div class="stats-bar">
+    <div class="stat-pill"><div class="stat-dot dot-gray"></div><span class="stat-label">Total:</span><span class="stat-value" id="stat-total">0</span></div>
+    <div class="stat-pill"><div class="stat-dot dot-green"></div><span class="stat-label">Online:</span><span class="stat-value" id="stat-online">0</span></div>
+    <div class="stat-pill"><div class="stat-dot dot-red"></div><span class="stat-label">Bloqueados:</span><span class="stat-value" id="stat-blocked">0</span></div>
+  </div>
+
+  <div class="lock-all-bar" id="lock-all-bar" style="display:none">
+    <div class="lock-all-text">
+      <strong>🔒 Controle Geral</strong>
+      <p>Bloquear ou liberar todos de uma vez</p>
+    </div>
+    <div class="lock-all-btns">
+      <button class="btn-all btn-all-unlock" onclick="setAll(false)">✅ Liberar Todos</button>
+      <button class="btn-all btn-all-lock" onclick="setAll(true)">🔒 Bloquear Todos</button>
+    </div>
+  </div>
+
+  <div class="section-title">Dispositivos</div>
+  <div class="devices-grid" id="devices-grid">
+    <div class="empty-state">
+      <div class="empty-icon">📱</div>
+      <h3>Aguardando conexão...</h3>
+      <p>Conectando ao Firebase</p>
+    </div>
+  </div>
+</main>
+
+<div id="toast"></div>
+
+<!-- MODAL ADICIONAR -->
+<div class="modal-overlay" id="modal-add">
+  <div class="modal">
+    <h2>📱 Novo Dispositivo</h2>
+    <p>Adicione um celular ou tablet para controlar</p>
+    <div class="form-group"><label>Nome do dispositivo</label><input id="add-name" placeholder="ex: Celular da Ana"/></div>
+    <div class="form-group"><label>Dono</label><input id="add-owner" placeholder="ex: Ana"/></div>
+    <div class="form-group"><label>Tipo</label><select id="add-type"><option value="celular">📱 Celular</option><option value="tablet">📟 Tablet</option></select></div>
+    <div class="form-group"><label>Ícone</label><div class="emoji-grid" id="emoji-grid"></div></div>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="closeModal('modal-add')">Cancelar</button>
+      <button class="btn-confirm" onclick="addDevice()">Adicionar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL AGENDAMENTO -->
+<div class="modal-overlay" id="modal-schedule">
+  <div class="modal">
+    <h2>⏰ Agendamento</h2>
+    <p id="schedule-device-name">Configurar horários de bloqueio automático</p>
+    <div class="form-group">
+      <label>Dias da semana</label>
+      <div class="days-grid" id="days-grid">
+        <button class="day-btn" data-day="0">Dom</button>
+        <button class="day-btn active" data-day="1">Seg</button>
+        <button class="day-btn active" data-day="2">Ter</button>
+        <button class="day-btn active" data-day="3">Qua</button>
+        <button class="day-btn active" data-day="4">Qui</button>
+        <button class="day-btn active" data-day="5">Sex</button>
+        <button class="day-btn" data-day="6">Sáb</button>
+      </div>
+    </div>
+    <div class="time-row">
+      <div class="form-group"><label>Bloquear às</label><input type="time" id="sched-start" value="22:00"/></div>
+      <div class="form-group"><label>Liberar às</label><input type="time" id="sched-end" value="07:00"/></div>
+    </div>
+    <div class="form-group"><label>Status</label><select id="sched-enabled"><option value="true">✅ Ativado</option><option value="false">⏸️ Pausado</option></select></div>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="closeModal('modal-schedule')">Cancelar</button>
+      <button class="btn-confirm" onclick="saveSchedule()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════
+//  FIREBASE — SUAS CREDENCIAIS
+// ══════════════════════════════
+const firebaseConfig = {
+  apiKey:            "AIzaSyDzYVctAVE6azDfoUtnM3TBD-zz9Fmn19Y",
+  authDomain:        "guardiao-familiar-11cb4.firebaseapp.com",
+  databaseURL:       "https://guardiao-familiar-11cb4-default-rtdb.firebaseio.com",
+  projectId:         "guardiao-familiar-11cb4",
+  storageBucket:     "guardiao-familiar-11cb4.firebasestorage.app",
+  messagingSenderId: "1055556807408",
+  appId:             "1:1055556807408:web:8d0b9bd4382f85b2c9f035"
+};
+
+let db = null;
+let devices = {};
+let scheduleTargetId = null;
+const EMOJIS = ['👧','👩','🧒','🎀','🌸','⭐','🐱','🐶','🦄','🌈','🎮','🎵','📚','🏀','⚽'];
+let selectedEmoji = '👧';
+
+window.addEventListener('load', () => {
+  try {
+    firebase.initializeApp(firebaseConfig);
+    db = firebase.database();
+    db.ref('.info/connected').on('value', snap => {
+      const banner = document.getElementById('status-banner');
+      if (snap.val()) {
+        banner.className = 'connected';
+        banner.textContent = '✅ Firebase conectado — Guardiao-familiar';
+      } else {
+        banner.className = 'connecting';
+        banner.textContent = '⏳ Reconectando...';
+      }
+    });
+    listenDevices();
+  } catch(e) {
+    const banner = document.getElementById('status-banner');
+    banner.className = 'error';
+    banner.textContent = '❌ Erro Firebase: ' + e.message;
+  }
+  buildEmojiGrid();
+  checkSchedules();
+  setInterval(checkSchedules, 60000);
+});
+
+function updateClock() {
+  document.getElementById('clock').textContent = new Date().toLocaleTimeString('pt-BR',{hour12:false});
+}
+setInterval(updateClock,1000);
+updateClock();
+
+function listenDevices() {
+  db.ref('devices').on('value', snap => {
+    devices = snap.val() || {};
+    renderDevices();
+  });
+}
+
+function renderDevices() {
+  const grid = document.getElementById('devices-grid');
+  const keys = Object.keys(devices);
+  document.getElementById('stat-total').textContent   = keys.length;
+  document.getElementById('stat-online').textContent  = keys.filter(k=>devices[k].online).length;
+  document.getElementById('stat-blocked').textContent = keys.filter(k=>devices[k].blocked).length;
+  document.getElementById('lock-all-bar').style.display = keys.length > 1 ? 'flex' : 'none';
+  if (keys.length === 0) {
+    grid.innerHTML = `<div class="empty-state"><div class="empty-icon">📱</div><h3>Nenhum dispositivo ainda</h3><p>Clique em "+ Dispositivo" para começar</p></div>`;
+    return;
+  }
+  grid.innerHTML = '';
+  keys.forEach((id,i) => {
+    const d = devices[id];
+    const card = document.createElement('div');
+    card.className = `device-card ${d.blocked?'blocked':''} ${d.online?'online':''}`;
+    card.style.animationDelay = (i*0.07)+'s';
+    const sched = d.schedule;
+    let schedHtml = '';
+    if (sched && sched.enabled==='true') {
+      const days=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+      const activeDays=(sched.days||[]).map(d=>days[d]).join(', ');
+      schedHtml=`<div class="schedule-info">⏰ <span>Bloqueia ${sched.start}–${sched.end} (${activeDays})</span><span class="schedule-edit" onclick="openScheduleModal('${id}')">editar</span></div>`;
+    } else {
+      schedHtml=`<div class="schedule-info">⏰ <span style="color:var(--muted)">Sem agendamento</span><span class="schedule-edit" onclick="openScheduleModal('${id}')">configurar</span></div>`;
+    }
+    const lastSeen = d.lastSeen
+      ? `<div class="last-seen">Último acesso: ${new Date(d.lastSeen).toLocaleString('pt-BR')}</div>`
+      : `<div class="last-seen">Aguardando app...</div>`;
+    card.innerHTML = `
+      <div class="card-header">
+        <div class="device-avatar">${d.emoji||(d.type==='tablet'?'📟':'📱')}<div class="status-dot ${d.online?'online':'offline'}"></div></div>
+        <div class="device-info"><div class="device-name">${d.name}</div><div class="device-owner">${d.owner}</div></div>
+        <div class="${d.blocked?'badge-blocked':'badge-free'}">${d.blocked?'BLOQUEADO':'LIVRE'}</div>
+      </div>
+      ${lastSeen}${schedHtml}
+      <div class="card-actions">
+        ${d.blocked
+          ? `<button class="btn-block unlock" onclick="toggleBlock('${id}',false)">✅ Liberar</button>`
+          : `<button class="btn-block lock" onclick="toggleBlock('${id}',true)">🔒 Bloquear</button>`}
+        <button class="btn-schedule" onclick="openScheduleModal('${id}')">⏰</button>
+        <button class="btn-remove" onclick="removeDevice('${id}')">🗑️</button>
+      </div>`;
+    grid.appendChild(card);
+  });
+}
+
+function toggleBlock(id, blocked) {
+  db.ref(`devices/${id}`).update({blocked});
+  showToast(blocked?`🔒 ${devices[id]?.name} bloqueado`:`✅ ${devices[id]?.name} liberado`, blocked?'#ff4d6d':'#2edd9a');
+}
+
+function setAll(blocked) {
+  const updates={};
+  Object.keys(devices).forEach(k=>{updates[`devices/${k}/blocked`]=blocked;});
+  db.ref().update(updates);
+  showToast(blocked?'🔒 Todos bloqueados':'✅ Todos liberados', blocked?'#ff4d6d':'#2edd9a');
+}
+
+function removeDevice(id) {
+  if (!confirm(`Remover "${devices[id]?.name}"?`)) return;
+  db.ref(`devices/${id}`).remove();
+  showToast('🗑️ Dispositivo removido','#5a6070');
+}
+
+function openAddModal() {
+  document.getElementById('add-name').value='';
+  document.getElementById('add-owner').value='';
+  selectedEmoji='👧';
+  document.querySelectorAll('.emoji-btn').forEach(b=>b.classList.toggle('selected',b.dataset.emoji===selectedEmoji));
+  document.getElementById('modal-add').classList.add('open');
+}
+
+function addDevice() {
+  const name=document.getElementById('add-name').value.trim();
+  const owner=document.getElementById('add-owner').value.trim();
+  const type=document.getElementById('add-type').value;
+  if (!name||!owner){showToast('⚠️ Preencha nome e dono','#ffb833');return;}
+  const id='device_'+Date.now();
+  db.ref(`devices/${id}`).set({name,owner,type,emoji:selectedEmoji,blocked:false,online:false,lastSeen:null,schedule:{enabled:'false',start:'22:00',end:'07:00',days:[1,2,3,4,5]}});
+  closeModal('modal-add');
+  showToast(`📱 ${name} adicionado!`,'#2edd9a');
+}
+
+function openScheduleModal(id) {
+  scheduleTargetId=id;
+  const d=devices[id];
+  document.getElementById('schedule-device-name').textContent=`Dispositivo: ${d.name}`;
+  const sched=d.schedule||{};
+  document.getElementById('sched-start').value=sched.start||'22:00';
+  document.getElementById('sched-end').value=sched.end||'07:00';
+  document.getElementById('sched-enabled').value=sched.enabled||'false';
+  const activeDays=sched.days||[1,2,3,4,5];
+  document.querySelectorAll('.day-btn').forEach(btn=>{
+    btn.classList.toggle('active',activeDays.includes(parseInt(btn.dataset.day)));
+    btn.onclick=()=>btn.classList.toggle('active');
+  });
+  document.getElementById('modal-schedule').classList.add('open');
+}
+
+function saveSchedule() {
+  const activeDays=[];
+  document.querySelectorAll('.day-btn.active').forEach(b=>activeDays.push(parseInt(b.dataset.day)));
+  const sched={enabled:document.getElementById('sched-enabled').value,start:document.getElementById('sched-start').value,end:document.getElementById('sched-end').value,days:activeDays};
+  db.ref(`devices/${scheduleTargetId}/schedule`).set(sched);
+  closeModal('modal-schedule');
+  showToast('⏰ Agendamento salvo!','#4f8eff');
+}
+
+function checkSchedules() {
+  const now=new Date();
+  const currentDay=now.getDay();
+  const currentTime=now.getHours().toString().padStart(2,'0')+':'+now.getMinutes().toString().padStart(2,'0');
+  Object.keys(devices).forEach(id=>{
+    const d=devices[id];
+    const sched=d.schedule;
+    if (!sched||sched.enabled!=='true') return;
+    if (!(sched.days||[]).includes(currentDay)) return;
+    const shouldBlock=currentTime>=sched.start||currentTime<sched.end;
+    if (shouldBlock!==d.blocked) toggleBlock(id,shouldBlock);
+  });
+}
+
+function buildEmojiGrid() {
+  const grid=document.getElementById('emoji-grid');
+  EMOJIS.forEach(e=>{
+    const btn=document.createElement('button');
+    btn.className='emoji-btn'+(e===selectedEmoji?' selected':'');
+    btn.textContent=e;btn.dataset.emoji=e;
+    btn.onclick=()=>{selectedEmoji=e;document.querySelectorAll('.emoji-btn').forEach(b=>b.classList.remove('selected'));btn.classList.add('selected');};
+    grid.appendChild(btn);
+  });
+}
+
+function closeModal(id){document.getElementById(id).classList.remove('open')}
+document.querySelectorAll('.modal-overlay').forEach(o=>o.addEventListener('click',e=>{if(e.target===o)o.classList.remove('open')}));
+
+let toastTimer=null;
+function showToast(msg,color='#4f8eff') {
+  const toast=document.getElementById('toast');
+  toast.textContent=msg;toast.style.borderColor=color+'40';toast.style.color=color;
+  toast.classList.add('show');
+  if(toastTimer)clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>toast.classList.remove('show'),3000);
+}
+</script>
+</body>
+</html>
